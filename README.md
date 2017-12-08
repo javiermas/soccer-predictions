@@ -4,15 +4,7 @@ Project for predicting soccer results
 ## Repository structure
 ```
 ├── defs
-│   ├── utils
-│   ├── sensor_1 (e.g. location)
-│   ├── ...
-│   └── sensor_N
 ├── figs
-├── notebooks
-├── export_db.sh
-├── import_db.sh
-├── sync_db.sh
 ├── README.md
 └── .gitignore
 ```
