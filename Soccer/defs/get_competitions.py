@@ -1,14 +1,15 @@
 import requests
 import pandas as pd
 
+
 def get_competitions(create=True, save=False):
     if not create:
         return pd.DataFrame.from_csv('competition_ids')
 
-    query_string = 'http://api.football-data.org/v1/competitions/?season=' 
+   query_string = 'http://api.football-data.org/v1/competitions/?season='
     ids, leagues, league_names, years = [[] for i in range(4)]
     for year in ['2015', '2016', '2017']:
-        req = requests.request('GET', query_string+year)
+        req = requests.request('GET', query_string + year)
         competitions = req.json()
         for c in competitions:
             ids.append(c['id'])
@@ -17,13 +18,12 @@ def get_competitions(create=True, save=False):
             years.append(c['year'])
 
     league_ids = pd.DataFrame({
-        'Ids':ids, 
-        'League':leagues, 
-        'LeagueName':league_names, 
-        'Year':years
+        'Ids': ids,
+        'League': leagues,
+        'LeagueName': league_names,
+        'Year': years
     })
-    if save: 
+    if save:
         league_ids.to_csv('competition_ids')
 
     return league_ids
-
