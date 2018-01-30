@@ -3,8 +3,12 @@ Project for predicting soccer results
 
 ## Repository structure
 ```
-├── defs
+├── Soccer
+│   ├── data
+│   └── defs
 ├── figs
+├── notebooks
+├── main.py
 ├── README.md
 └── .gitignore
 ```
