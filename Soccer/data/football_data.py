@@ -7,6 +7,7 @@ import numpy as np
 from Soccer.data.competitions import Competitions
 from Soccer.data.teams import Teams
 from Soccer.data.players import Players
+from Soccer.data.fixtures import Fixtures
 
 
 class FootballData(object):
@@ -22,6 +23,7 @@ class FootballData(object):
         self.competitions = Competitions()
         self.teams = Teams()
         self.players = Players()
+        self.fixtures = Fixtures()
         self.url = 'http://api.football-data.org/v1/'
         self.headers = {'X-Auth-Token': os.environ['FOOTBALL_API_KEY']}
         self.path = os.getcwd().split('soccer_predictions')[0] + \
@@ -85,8 +87,14 @@ class FootballData(object):
         self.extract_competition_data()
         print 'Now extracting team data'
         self.extract_team_data()
-        print 'Now extracting player data'
-        self.extract_player_data()
+        #print 'Now extracting player data'
+        #self.extract_player_data()
+        print 'Now extracting fixture data'
+        self.extract_fixture_data()
+
+    def extract_fixture_data(self):
+        self.fixtures_table = self._create_fixtures_table()
+        self.fixtures.save(self.fixtures_table)
         
     def extract_competition_data(self):
         self.competitions_table = self._create_competitions_table()
@@ -107,6 +115,13 @@ class FootballData(object):
                                     'name', 'nationality', 
                                     'position', 'team_id']])
 
+    def _create_fixtures_table(self):
+        competition_ids = self.competitions.get_competition_ids()
+        fixtures_data = map(self._get_fixtures_data, competition_ids)
+        fixtures_data = pd.concat(fixtures_data).reset_index(drop=True)
+        fixtures_data['id'] = fixtures_data.apply(self._create_fixture_id, axis=1)
+        return fixtures_data
+
     def _create_competitions_table(self):
         seasons = ['2015', '2016', '2017']
         competitions_data = map(self._get_competition_data, seasons)
@@ -124,6 +139,28 @@ class FootballData(object):
         players_data = map(self._get_players_data, unique_teams)
         players_data = pd.concat(players_data).reset_index(drop=True)
         return players_data
+
+    def _get_fixtures_data(self, competition_id):
+        query = self.url + 'competitions/%s/fixtures' % (competition_id)
+        req = requests.request('GET', query, headers=self.headers)
+        try:
+            fixtures = pd.DataFrame(req.json()['fixtures'])
+        except (KeyError, ValueError) as e:
+            if 'error' in req.json().keys():
+                if 'restricted' in req.json()['error']:
+                    print 'Fixtures for comp. %s are restricted' % competition_id
+                    return None
+
+            print 'Number of requests exceeded, now waiting.'
+            time.sleep(60)
+            req = requests.request('GET', query, headers=self.headers)
+            fixtures = pd.DataFrame.from_dict(req.json()['fixtures'])
+
+        results = fixtures['result'].apply(self._dict_to_dataframe)
+        odds = fixtures['odds'].apply(self._dict_to_dataframe)
+        fixtures = pd.concat([fixtures, results, odds], axis=1)
+        fixtures = fixtures.drop(['_links', 'result', 'odds'], axis=1)
+        return fixtures
 
     def _get_competition_data(self, season):
         query = self.url + 'competitions/?season=%s' % (season)
@@ -155,7 +192,11 @@ class FootballData(object):
     def _get_players_data(self, team_id):
         query = self.url + 'teams/%s/players' % team_id
         req = requests.request('GET', query, headers=self.headers)
-        players_json = req.json()
+        try:
+            players_json = req.json()
+        except:
+            print req
+
         try:
             players_data = pd.DataFrame(players_json['players'])
         except KeyError:
@@ -167,13 +208,15 @@ class FootballData(object):
 
         players_data['team_id'] = team_id
         return players_data
+    
+    @staticmethod
+    def _create_fixture_id(row):
+        return row['homeTeamName'][:3] + row['awayTeamName'][:3] + row['date'][:7]
 
     @staticmethod
     def _dict_to_dataframe(dict_):
-        data_frame = pd.Series()
-        data_frame['goals_away'] = dict_['goalsAwayTeam']
-        data_frame['goals_home'] = dict_['goalsHomeTeam']
-        return data_frame
+        series = pd.Series(dict_)
+        return series
 
     @staticmethod
     def _get_team_code(dict_):

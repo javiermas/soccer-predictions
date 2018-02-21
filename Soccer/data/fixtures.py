@@ -1,27 +1,28 @@
 import pandas as pd
 from pymongo import MongoClient
 
-class Competitions(object):
+
+class Fixtures(object):
     def __init__(self):
         client = MongoClient('127.0.0.1', 27017)
         self.db = client.soccer
-        self.competitions = self.db.competitions
+        self.fixtures = self.db.fixtures
 
     def load(self):
-        cursor = self.competitions.find()
+        cursor = self.fixtures.find()
         return pd.DataFrame(list(cursor))
 
     def save(self, docs):
         for key, row in docs.iterrows():
-            self.competitions.update({'id': row['id']}, row.to_dict(), upsert=True)
+            self.fixtures.update({'id': row['id']}, row.to_dict(), upsert=True)
 
     def get_competition_ids(self):
-        cursor = self.competitions.distinct('id')
+        cursor = self.fixtures.distinct('id')
         return list(cursor)
 
     def update(self, doc):
-        bulk = self.competitions.initialize_ordered_bulk_op()
-        for record in self.competitions.find(snapshot=True):
+        bulk = self.fixtures.initialize_ordered_bulk_op()
+        for record in self.fixtures.find(snapshot=True):
             new_record = doc.loc[doc['competition'] == record['competition']]
             bulk.find({'team': record['competition']})\
                     .update({})
