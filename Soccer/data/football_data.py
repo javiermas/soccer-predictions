@@ -1,6 +1,7 @@
 import os
 import copy
 import requests
+import datetime
 import time
 import pandas as pd
 import numpy as np
@@ -29,48 +30,144 @@ class FootballData(object):
         self.path = os.getcwd().split('soccer_predictions')[0] + \
             'soccer_predictions/'
 
-    def get_competition_fixtures(self, competition, season):
-        '''Receives a competition id and a season and
-        returns a dataframe with the corresponding
-        fixtures.
-        '''
-        if isinstance(season, str):
-            season = int(season)
 
-        competition_id = np.unique(self.competitions_table.loc[
-            (self.competitions_table['league'] == competition) &
-            (self.competitions_table['season'] == season), 'id'])[0]
-        query = self.url + 'competitions/%s/fixtures' % competition_id
+    def extract_data(self):
+        print 'Now extracting competition data'
+        self.extract_competition_data()
+        print 'Now extracting team data'
+        self.extract_team_data()
+        # print 'Now extracting player data'
+        # self.extract_player_data()
+        print 'Now extracting fixture data'
+        self.extract_fixture_data()
+
+    def extract_competition_data(self):
+        seasons = ['2015', '2016', '2017']
+        seasons_exist = self._check_data_existence(seasons=seasons)
+        seasons = seasons[~seasons_exist]
+        cols = ['caption', 'id', 'league', 'year', 'season']
+        for season in seasons:
+            competition_data = self._get_competition_data(season)
+            self.competitions.save(competition_data[cols])
+
+    def extract_team_data(self):
+        competitions = self.competitions.get_competition_ids()
+        teams_in_competition_exist = self._check_data_existence(
+                teams_in_competition=competitions)
+        competitions = competitions[~teams_in_competition_exist]
+        cols = ['code', 'shortName', 'name', 'team_id',
+                'competition_id', 'squadMarketValue']
+        for competition in competitions:
+            team_data = self._get_team_data(competition)
+            self.teams.save(team_data[cols])
+
+    def extract_fixture_data(self):
+        self.fixtures_table = self._create_fixtures_table()
+        self.fixtures.save(self.fixtures_table)
+
+    def extract_player_data(self):
+        self.players_table = self._create_players_table()
+        self.players.save(
+                self.players_table[['dateOfBirth', 'marketValue',
+                                    'name', 'nationality',
+                                    'position', 'team_id']])
+
+    def _check_data_existence(self, seasons=None, competitions=None,
+                              teams_in_competitions=None, fixtures=None):
+        if seasons is not None:
+            return self.competitions.seasons_exist(seasons)
+        if teams_in_competitions is not None:
+            return self.teams.teams_in_competition_exist(teams_in_competitions)
+
+    def _create_fixtures_table(self):
+        competition_ids = self.competitions.get_competition_ids()
+        fixtures_data = list()
+        for id_ in competition_ids:
+            if self.fixtures.load(id_).empty:
+                fixture_data = self._get_fixtures_data(id_)
+                fixtures_data.append(fixture_data)
+
+        fixtures_data = pd.concat(fixtures_data).reset_index(drop=True)
+        fixtures_data['id'] = fixtures_data.apply(self._create_fixture_id, axis=1)
+        return fixtures_data
+
+    def _create_players_table(self):
+        unique_teams = self.teams_table['team_id'].unique()
+        players_data = map(self._get_players_data, unique_teams)
+        players_data = pd.concat(players_data).reset_index(drop=True)
+        return players_data
+
+    def _get_fixtures_data(self, competition_id):
+        query = self.url + 'competitions/%s/fixtures' % (competition_id)
         req = requests.request('GET', query, headers=self.headers)
-        comp_json = req.json()
+        print competition_id
         try:
-            fixtures = pd.DataFrame.from_dict(comp_json['fixtures'])
-        except KeyError:
-            print comp_json
+            fixtures = pd.DataFrame(req.json()['fixtures'])
+        except (KeyError, ValueError) as e:
+            if 'seconds' in req.json()['error']:
+                print req.json()
+                print 'Number of requests exceeded, now waiting.'
+                time.sleep(65)
+                req = requests.request('GET', query, headers=self.headers)
+                if 'error' in req.json().keys():
+                    print req.json()
+                    return None
+            else:
+                return None
 
-        results = (fixtures['result'])
-        results = results.apply(self._dict_to_dataframe)
-        fixtures = pd.concat((fixtures, results), axis=1)
-        fixtures = fixtures.drop('result', axis=1)
-        fixtures = fixtures.assign(id=competition_id)
-        fixtures_ranks = fixtures.apply(self._get_ranks_row, axis=1)
-        fixtures = pd.concat((fixtures, fixtures_ranks), axis=1)
+            fixtures = pd.DataFrame.from_dict(req.json()['fixtures'])
+
+        results = fixtures['result'].apply(self._dict_to_dataframe)
+        odds = fixtures['odds'].apply(self._dict_to_dataframe)
+        fixtures = pd.concat([fixtures, results, odds], axis=1)
+        fixtures = fixtures.drop(['_links', 'result', 'odds'], axis=1)
+        fixtures = fixtures.assign(competition_id=competition_id)
+        ranks = fixtures.apply(self._get_ranks_row, axis=1)
+        fixtures = pd.concat([fixtures, ranks], axis=1)
+        fixtures['datetime'] = fixtures['date'].apply(lambda x: 
+            datetime.datetime.strptime(x, '%Y-%m-%dT%H:%M:%SZ'))
+        fixtures['date'] = fixtures['datetime'].dt.date
+        fixtures['datetime'] = fixtures['datetime'].astype(str)
+        fixtures['date'] = fixtures['date'].astype(str)
+        fixtures['id'] = fixtures['homeTeamName'].astype(str) +\
+            '_' + fixtures['competition_id'].astype(str) + '_' +\
+            fixtures['matchday'].astype(str)
+        print fixtures.head()
+        print 'Now saving'
+        self.fixtures.save(fixtures)
         return fixtures
 
     def _get_ranks_row(self, row):
         matchday = row['matchday']
-        id = row['id']
+        id = row['competition_id']
         query = self.url + 'competitions/' + str(id) +\
             '/leagueTable/?matchday=' + str(matchday) 
-        req = requests.request('GET', query, headers=self.headers)
-        ranks = req.json()
         try:
+            req = requests.request('GET', query, headers=self.headers)
+            ranks = req.json()
             rank_home = [rank for rank in ranks['standing']
                          if rank['teamName'] == row['homeTeamName']][0]
             rank_away = [rank for rank in ranks['standing']
                          if rank['teamName'] == row['awayTeamName']][0]
-        except:
-            print ranks
+        except ValueError:
+            return None
+        except KeyError:
+            if 'seconds' in ranks['error']:
+                print 'Number of requests exceeded, now waiting.'
+                time.sleep(65)
+                req = requests.request('GET', query, headers=self.headers)
+                ranks = req.json()
+                if 'error' in req.json().keys():
+                    print req.json()
+                    return None
+
+                rank_home = [rank for rank in ranks['standing']
+                             if rank['teamName'] == row['homeTeamName']][0]
+                rank_away = [rank for rank in ranks['standing']
+                             if rank['teamName'] == row['awayTeamName']][0]
+            else:
+                print ranks
+                return None
 
         cols = ['playedGames', 'goals', 'goalsAgainst', 'points',
                 'wins', 'draws', 'losses']
@@ -82,86 +179,6 @@ class FootballData(object):
         ranks.update(rank_away)
         return pd.Series(ranks)
 
-    def extract_data(self):
-        print 'Now extracting competition data'
-        self.extract_competition_data()
-        print 'Now extracting team data'
-        self.extract_team_data()
-        #print 'Now extracting player data'
-        #self.extract_player_data()
-        print 'Now extracting fixture data'
-        self.extract_fixture_data()
-
-    def extract_fixture_data(self):
-        self.fixtures_table = self._create_fixtures_table()
-        self.fixtures.save(self.fixtures_table)
-        
-    def extract_competition_data(self):
-        self.competitions_table = self._create_competitions_table()
-        self.competitions.save(
-                self.competitions_table[['caption', 'id', 
-                                        'league', 'year', 'season']])
-
-    def extract_team_data(self):
-        self.teams_table = self._create_teams_table()
-        self.teams.save(
-                self.teams_table[['code', 'shortName', 'name', 'team_id',
-                                  'competition_id', 'squadMarketValue']])
-
-    def extract_player_data(self):
-        self.players_table = self._create_players_table()
-        self.players.save(
-                self.players_table[['dateOfBirth', 'marketValue',
-                                    'name', 'nationality', 
-                                    'position', 'team_id']])
-
-    def _create_fixtures_table(self):
-        competition_ids = self.competitions.get_competition_ids()
-        fixtures_data = map(self._get_fixtures_data, competition_ids)
-        fixtures_data = pd.concat(fixtures_data).reset_index(drop=True)
-        fixtures_data['id'] = fixtures_data.apply(self._create_fixture_id, axis=1)
-        return fixtures_data
-
-    def _create_competitions_table(self):
-        seasons = ['2015', '2016', '2017']
-        competitions_data = map(self._get_competition_data, seasons)
-        competitions_data = pd.concat(competitions_data).reset_index(drop=True)
-        return competitions_data
-
-    def _create_teams_table(self):
-        competitions = self.competitions_table['id'].unique()
-        teams_data = map(self._get_team_data, competitions)
-        teams_data = pd.concat(teams_data).reset_index(drop=True)
-        return teams_data
-
-    def _create_players_table(self):
-        unique_teams = self.teams_table['team_id'].unique()
-        players_data = map(self._get_players_data, unique_teams)
-        players_data = pd.concat(players_data).reset_index(drop=True)
-        return players_data
-
-    def _get_fixtures_data(self, competition_id):
-        query = self.url + 'competitions/%s/fixtures' % (competition_id)
-        req = requests.request('GET', query, headers=self.headers)
-        try:
-            fixtures = pd.DataFrame(req.json()['fixtures'])
-        except (KeyError, ValueError) as e:
-            if 'error' in req.json().keys():
-                if 'restricted' in req.json()['error']:
-                    print 'Fixtures for comp. %s are restricted' % competition_id
-                    return None
-
-            print 'Number of requests exceeded, now waiting.'
-            time.sleep(60)
-            req = requests.request('GET', query, headers=self.headers)
-            fixtures = pd.DataFrame.from_dict(req.json()['fixtures'])
-
-        results = fixtures['result'].apply(self._dict_to_dataframe)
-        odds = fixtures['odds'].apply(self._dict_to_dataframe)
-        fixtures = pd.concat([fixtures, results, odds], axis=1)
-        fixtures = fixtures.drop(['_links', 'result', 'odds'], axis=1)
-        return fixtures
-
     def _get_competition_data(self, season):
         query = self.url + 'competitions/?season=%s' % (season)
         req = requests.request('GET', query, headers=self.headers)
@@ -169,7 +186,7 @@ class FootballData(object):
             competitions = pd.DataFrame(req.json())
         except ValueError:
             print 'Number of requests exceeded, now waiting.'
-            time.sleep(60)
+            time.sleep(65)
             req = requests.request('GET', query, headers=self.headers)
             competitions = pd.DataFrame(req.json())
 
@@ -201,7 +218,7 @@ class FootballData(object):
             players_data = pd.DataFrame(players_json['players'])
         except KeyError:
             print 'Number of requests exceeded, now waiting.'
-            time.sleep(60)
+            time.sleep(65)
             req = requests.request('GET', query, headers=self.headers)
             players_json = req.json()
             players_data = pd.DataFrame(players_json['players'])
@@ -222,3 +239,9 @@ class FootballData(object):
     def _get_team_code(dict_):
         code = dict_['self']['href'].split('/')[-1]
         return code
+
+
+
+if __name__ == '__main__':
+    fb = FootballData()
+    fb.extract_data()
