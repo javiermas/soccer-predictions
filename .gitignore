@@ -1,0 +1,5 @@
+*.pyc
+*.swp
+*.csv
+/data/
+.ipynb_checkpoints
