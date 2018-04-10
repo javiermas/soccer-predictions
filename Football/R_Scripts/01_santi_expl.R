@@ -85,10 +85,11 @@ data<- data[order(as.Date(data$Date, format="%d/%m/%y")),]
 target <- ifelse(data$FTR=='H', 1, 0)
 
 
-## Agg goals feature
+## Agg Home goals feature
 
 datalist1 <- list()
-datalist2 <- list()
+agg_goals.df <- list()
+
 for (i in 1:length(years_for_search_and_extract)){
   
   sub <- subset(data, Season == years_for_search_and_extract[i])
@@ -97,19 +98,26 @@ for (i in 1:length(years_for_search_and_extract)){
   
   for (j in 1:length(l)){
     
-    temp <- subset(sub, HomeTeam == l[j], select = c('Date','HomeTeam','FTHG'))
+    temp <- subset(sub, HomeTeam == l[j], select = c('Date','Div', 'HomeTeam','FTHG'))
     temp$agg_goals.f <- cumsum(temp$FTHG)
     
-    datalist2[[j]] <- temp
+    datalist1[[j]] <- temp
     
   }
 
-temp2 <- do.call(rbind, datalist2[])
-sub <- merge(x = sub, y = temp2[,c('Date','HomeTeam','agg_goals.f')], by = c("Date","HomeTeam"), all.x = TRUE)
-datalist1[[i]] <- sub    
+temp2 <- do.call(rbind, datalist1[])
+# sub <- merge(x = sub, y = temp2[,c('Date','HomeTeam','agg_goals.f')], by = c("Date","HomeTeam"), all.x = TRUE)
+agg_goals.df[[i]] <-temp2    
   
 }
 
+## Worked, Create function agg_feature and source
+
+source('~/Desktop/soccer-predictions/Football/R_Scripts/FUN_agg_feature.R')
+
+## Agg Away goals feature (Cum away goals scored on home team)
+
+agg_A_goals.df <- agg_feature('HomeTeam','FTAG')
 
  
 
