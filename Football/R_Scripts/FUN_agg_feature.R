@@ -12,8 +12,16 @@ for (i in 1:length(years_for_search_and_extract)){
   
   for (j in 1:length(l)){
     
-    temp <- subset(sub, sub[,HA] == l[j], select = c('Date','Div', 'HomeTeam', HA, var))
-    temp$agg_goals.f <- cumsum(temp[,var])
+    temp <- subset(sub, sub[,HA] == l[j], select = c('Date','Div', 'HomeTeam', 'AwayTeam', HA, var))
+    
+    if (HA == 'HomeTeam'){
+    name.var <- paste('H.agg_', var, sep = '')
+    }else 
+    {
+      name.var <- paste('A.agg_', var, sep = '')  
+    }
+    
+    temp[,name.var] <- cumsum(temp[,var])
     
     datalist1[[j]] <- temp
     
