@@ -1,10 +1,11 @@
 import pandas as pd
-from pymongo import MongoClient
+from Soccer.data.connection import Connection
+
 
 class Players(object):
-    def __init__(self):
-        client = MongoClient('127.0.0.1', 27017)
-        self.db = client.soccer
+    def __init__(self, host='127.0.0.1', port=27017):
+        connection = Connection(host, port)
+        self.db = connection.get_connection()
         self.players = self.db.players
 
     def load(self):

@@ -5,8 +5,8 @@ from Soccer.data.connection import Connection
 
 
 class Teams(object):
-    def __init__(self):
-        connection = Connection()
+    def __init__(self, host='127.0.0.1', port=27017):
+        connection = Connection(host, port)
         self.db = connection.get_connection()
         self.teams = self.db.teams
 
