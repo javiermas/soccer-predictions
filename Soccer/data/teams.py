@@ -1,11 +1,13 @@
 import pandas as pd
 import numpy as np
 from pymongo import MongoClient
+from Soccer.data.connection import Connection
+
 
 class Teams(object):
     def __init__(self):
-        client = MongoClient('127.0.0.1', 27018)
-        self.db = client.soccer
+        connection = Connection()
+        self.db = connection.get_connection()
         self.teams = self.db.teams
 
     def load(self):
@@ -16,15 +18,13 @@ class Teams(object):
         teams_in_competitions_exist = list()
         for competition in competitions:
             cursor = self.teams.find_one({'competition_id': competition})
-            team_data = pd.DataFrame(list(cursor))
-            teams_in_competitions_exist.append(team_data.empty)
+            teams_in_competitions_exist.append(cursor is not None)
 
-        return np.array(teams_in_competitions_exist)
-
+        return teams_in_competitions_exist
 
     def save(self, docs):
         for key, row in docs.iterrows():
-            self.teams.update({'team_id': row['team_id']}, row.to_dict(), 
+            self.teams.update({'unique_id': key}, row.to_dict(), 
                               upsert=True)
 
 
