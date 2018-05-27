@@ -1,16 +1,21 @@
 import pandas as pd
+from pandas import DataFrame
 from pymongo import MongoClient
+from Soccer.data.connection import Connection
 
 
 class Fixtures(object):
     def __init__(self):
-        client = MongoClient('127.0.0.1', 27017)
-        self.db = client.soccer
+        connection = Connection()
+        self.db = connection.get_connection()
+        self.competitions = self.db.competitions
         self.fixtures = self.db.fixtures
 
     def load(self):
         cursor = self.fixtures.find()
-        return pd.DataFrame(list(cursor))
+        data = DataFrame(list(cursor)).drop('_id', axis=1)\
+            .set_index(['competition_id', 'date'])
+        return data
 
     def save(self, docs):
         for key, row in docs.iterrows():
@@ -19,6 +24,14 @@ class Fixtures(object):
     def get_competition_ids(self):
         cursor = self.fixtures.distinct('id')
         return list(cursor)
+
+    def fixtures_in_competitions_exist(self, competitions):
+        fixtures_in_competitions_exist = list()
+        for competition in competitions:
+            cursor = self.fixtures.find_one({'competition_id': competition})
+            fixtures_in_competitions_exist.append(cursor is not None)
+
+        return fixtures_in_competitions_exist
 
     def update(self, doc):
         bulk = self.fixtures.initialize_ordered_bulk_op()
