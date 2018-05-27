@@ -1,12 +1,13 @@
 import pandas as pd
 import numpy as np
 from pymongo import MongoClient
+from Soccer.data.connection import Connection
 
 
 class Competitions(object):
     def __init__(self):
-        client = MongoClient('127.0.0.1', 27018)
-        self.db = client.soccer
+        connection = Connection()
+        self.db = connection.get_connection()
         self.competitions = self.db.competitions
 
     def load(self, seasons=None):
@@ -21,10 +22,9 @@ class Competitions(object):
         seasons_exist = list()
         for season in seasons:
             cursor = self.competitions.find_one({'season': season})
-            season_data = pd.DataFrame(list(cursor))
-            seasons_exist.append(season_data.empty)
+            seasons_exist.append(cursor is not None)
 
-        return np.array(seasons_exist)
+        return seasons_exist
 
     def load_many_seasons(self, seasons):
         return {'season': {'$in$': seasons}}
