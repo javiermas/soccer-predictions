@@ -1,0 +1,7 @@
+README.md
+setup.py
+soccerlearn/__init__.py
+soccerlearn.egg-info/PKG-INFO
+soccerlearn.egg-info/SOURCES.txt
+soccerlearn.egg-info/dependency_links.txt
+soccerlearn.egg-info/top_level.txt
