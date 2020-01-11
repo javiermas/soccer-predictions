@@ -60,6 +60,36 @@ def download_fixtures_and_odds_single_league(token, league_name, start_date, end
     if path is None:
         path = f'data/fixtures_and_odds_{league_name}_{str(start_date)}_{str(end_date)}.csv'
      
-    fixture_and_odds.to_csv(path)
+    fixture_and_odds.to_csv(path, index=False)
     print(f'Saved fixtures and odds for league {league_name}!')
 
+
+def get_teams_single_season(token, season_id):
+    api = SoccerApiV2(api_token=token)
+    team_data = pd.DataFrame(api.teams(season_id, includes=['transfers']))
+    team_data['season_id'] = season_id
+    return team_data
+
+def download_teams_single_league(token, league_name, base_path='data'):
+    leagues = pd.read_csv(base_path+'/leagues.csv')
+    seasons = eval(leagues.loc[leagues['name'] == league_name]['seasons'].iloc[0])
+    team_data = []
+    for season in seasons:
+        team_data.append(get_teams_single_season(token, season['id']))
+    
+    team_data = pd.concat(team_data).to_csv(f'{base_path}/teams_league_{league_name}.csv', index=False)
+    print(f'Saved teams for league {league_name}!')
+
+
+def download_standings_single_league(token, league_name, base_path='data'):
+    api = SoccerApiV2(api_token=token)
+    leagues = pd.read_csv(base_path+'/leagues.csv')
+    seasons = eval(leagues.loc[leagues['name'] == league_name]['seasons'].iloc[0])
+    all_standings = []
+    for season in seasons:
+        standings = pd.DataFrame(api.standings(season_id=season['id']))
+        standings['season_id'] = season['id']
+        all_standings.append(standings)
+    
+    pd.concat(all_standings).to_csv(base_path+f'/standings_{league_name}.csv')
+    print(f'Saved standings for league {league_name}!')
