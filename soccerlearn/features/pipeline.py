@@ -18,6 +18,7 @@ class Pipeline:
 
         feature_names = [f[0] for f in self.transformer_funcs if f[0]]
         data = self.combine_dataframes([data[k] for k in feature_names])
+        print('Pipeline finished')
         return data
 
     @staticmethod
