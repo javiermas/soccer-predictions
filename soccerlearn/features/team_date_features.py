@@ -56,8 +56,11 @@ def get_games_played_current_season(data):
     fixtures = data['pivot_fixtures_by_team'].copy()
     fixtures = fixtures.sort_index()
     fixtures['count'] = 1
-    games_played = fixtures.groupby(['team_id', 'season_id'])[['count']].cumsum()\
-        .rename(columns={'count': 'games_played_current_season'})
+    games_played = fixtures.groupby(['team_id', 'season_id'])[['count']]\
+        .shift(1)\
+        .cumsum()\
+        .rename(columns={'count': 'games_played_current_season'})\
+        .fillna(0)
     return games_played
 
 
@@ -68,7 +71,10 @@ def get_cumulative_results(data):
         .join(data['get_scores'])
     fixtures = fixtures.sort_index()
     columns_to_cumulate = ['win', 'draw', 'goals_scored', 'goals_conceded']
-    cumulative_results = fixtures.groupby(['team_id'])[columns_to_cumulate].cumsum()\
+    cumulative_results = fixtures.groupby(['team_id'])[columns_to_cumulate]\
+        .shift(1)\
+        .cumsum()\
+        .fillna(0)\
         .rename(columns={col: f'{col}_all_time' for col in columns_to_cumulate})
     return cumulative_results
 
@@ -78,44 +84,33 @@ def get_cumulative_results_current_season(data):
     fixtures = fixtures\
         .join(data['pivot_fixtures_by_team'][['season_id']])\
         .join(data['get_scores'])
-    fixtures = fixtures.sort_index()
-    columns_to_cumulate = ['win', 'draw', 'goals_scored', 'goals_conceded']
-    cumulative_results = fixtures.groupby(['team_id', 'season_id'])[columns_to_cumulate]\
+    fixtures = fixtures.sort_index().reset_index()
+    columns_to_shift = ['win', 'draw', 'goals_scored', 'goals_conceded']
+    for column in columns_to_shift:
+        fixtures[f'{column}_lag_1'] = fixtures.groupby(['team_id', 'season_id'])[column].shift()
+
+    columns_to_cumulate = [f'{column}_lag_1' for column in columns_to_shift]
+    renaming_dict = {col: f'{col.split("_lag_1")[0]}_current_season'
+                     for col in columns_to_cumulate}
+    cumulative_results = fixtures.reset_index()\
+        .groupby(['team_id', 'season_id'])[columns_to_cumulate]\
         .cumsum()\
-        .rename(columns={col: f'{col}_current_season' for col in columns_to_cumulate})
+        .fillna(0)\
+        .rename(columns=renaming_dict)
+    cumulative_results['team_id'] = fixtures['team_id']
+    cumulative_results['date'] = fixtures['date']
     cumulative_results['points_current_season'] = cumulative_results['win_current_season']*3\
         + cumulative_results['draw_current_season']
-    return cumulative_results
+    return cumulative_results.set_index(['team_id', 'date'])
 
 
-def compute_position_end_season(data):
-    standings = data['standings']
-    standing_features = []
-    for i, elem in standings.iterrows():
-        for team in eval(elem['standings']):
-            standing_features.append({
-                'team_id': team['team_id'],
-                'season_id': elem['season_id'],
-                'position_end_season': team['position'],
-            })
-
-    standing_features = pd.DataFrame(standing_features).set_index(['team_id', 'season_id'])
-    return standing_features
-
-
-def compute_previous_season_features(data, lags=[1]):
-    fixture_features = data['fixture_features']
-    feature_names = ['position_end_season', 'goals_scored_current_season',
-                    'points_current_season', 'goals_conceded_current_season']
-    features_per_season = fixture_features\
-        .groupby(['season_start_year', 'team_id'])[feature_names].max().sort_index()\
-        .rename(columns={c: c.replace('current_season', 'end_season') for c in feature_names})
-
-    previous_season_features = []
-    for lag in lags:
-        lagged_features = features_per_season.groupby('team_id').shift(lag)
-        lagged_features.columns = [f'{c}_lag_{lag}' for c in lagged_features.columns]
-        previous_season_features.append(lagged_features)
-
-    previous_season_features = pd.concat(previous_season_features, axis=1)
-    return previous_season_features
+def get_rolling_results(data):
+    PERIODS = 5
+    results = data['get_results'].sort_index().copy()
+    results['points_won'] = results['win'] * 3 + results['draw']
+    results[f'points_won_last_{PERIODS}_games_sum'] = results\
+        .groupby('team_id')['points_won']\
+        .shift(1)\
+        .rolling(PERIODS).sum()
+    
+    return results[[f'points_won_last_{PERIODS}_games_sum']]
