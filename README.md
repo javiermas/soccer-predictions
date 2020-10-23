@@ -5,15 +5,6 @@ Project for predicting soccer results
 
 ### Requirements
 
-We need a mysql db for Celery
-```
-brew install mysql
-brew services start mysql
-sudo mysql -e 'CREATE USER airflow@localhost'
-sudo mysql -e 'CREATE DATABASE airflow'
-sudo mysql -e "GRANT ALL PRIVILEGES ON airflow.* TO airflow"
-```
-
 ```
 virtualenv --python=python3.8 env
 source env/bin/activate
@@ -21,6 +12,11 @@ pip install -e .
 ```
 
 ## Set-up
+
+Airflow requires a postgreSQL database to store information, we can start it with:
+```
+pg_ctl -D /usr/local/var/postgres start
+```
 
 ```
 redis-server --daemonize yes \
