@@ -1,4 +1,7 @@
+![master-CI](https://github.com/javiermas/soccer-predictions/workflows/master-CI/badge.svg)
+
 # soccer-predictions
+
 Project for predicting soccer results
 
 ## Installation
