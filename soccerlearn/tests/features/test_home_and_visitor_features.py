@@ -10,10 +10,11 @@ class TestHomeAndVisitorFeatures(unittest.TestCase):
     def setUp(self):
         fixture_data = pd.DataFrame({
             'team_id': ['a', 'b', 'c', 'd'],
+            'season_id': ['a', 'a', 'a', 'a'],
             'date': [1, 1, 2, 2],
             'local': [False, True, False, True],
             'opposite_team_id': ['b', 'a', 'd', 'c'],
-        }).set_index(['team_id', 'date'])
+        }).set_index(['team_id', 'season_id', 'date'])
         feature_data = pd.DataFrame({
             'team_id': ['a', 'b', 'c', 'd'],
             'date': [1, 1, 2, 2],
@@ -29,8 +30,10 @@ class TestHomeAndVisitorFeatures(unittest.TestCase):
             'date': [1, 2],
             'local_goals_scored': [5, 15],
             'visitor_goals_scored': [10, 10],
+            'difference_in_goals_scored': [-5, 5],
             'local_team_id': ['b', 'd'],
             'visitor_team_id': ['a', 'c'],
+            'season_id': ['a', 'a'],
         }).set_index(['local_team_id', 'date'])
         output = compute_home_and_visitor_features(self.data)
         assertFrameEqual(output, expected_output)
