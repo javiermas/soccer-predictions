@@ -19,6 +19,7 @@ def list_requirements(fname='requirements.txt'):
     with open(fname) as fd:
         return fd.read().splitlines()
 
+
 setup(
     name=NAME,
     version=soccerlearn.__version__,
