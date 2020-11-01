@@ -43,7 +43,8 @@ class TestHomeAndVisitorFeatures(unittest.TestCase):
             'team_id': ['a', 'b', 'c', 'd'],
             'date': [1, 1, 2, 2],
             'local_team_id': ['b', 'b', 'd', 'd'],
-        }).set_index(['team_id', 'date'])
+            'season_id': ['a', 'a', 'a', 'a'],
+        }).set_index(['team_id', 'season_id', 'date'])
         output = _get_local_team_id(self.data['fixtures'])
         pd.testing.assert_frame_equal(output, expected_output)
 
@@ -52,6 +53,7 @@ class TestHomeAndVisitorFeatures(unittest.TestCase):
             'team_id': ['a', 'b', 'c', 'd'],
             'date': [1, 1, 2, 2],
             'visitor_team_id': ['a', 'a', 'c', 'c'],
-        }).set_index(['team_id', 'date'])
+            'season_id': ['a', 'a', 'a', 'a'],
+        }).set_index(['team_id', 'season_id', 'date'])
         output = _get_visitor_team_id(self.data['fixtures'])
         pd.testing.assert_frame_equal(output, expected_output)
