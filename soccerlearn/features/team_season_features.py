@@ -66,7 +66,7 @@ def compute_previous_season_features(data, lags=[1]):
                      'points_current_season', 'goals_conceded_current_season']
     # Here we are losing the last game
     features_per_season = fixture_features.groupby(['team_id', 'season_id'])[feature_names].max()
-    features_per_season = features_per_season.join(data['positions'], how='left')
+    #features_per_season = features_per_season.join(data['positions'], how='left')
     #features_per_season = fixture_features\
     #    .groupby(['season_id', 'team_id'])[feature_names].max().reset_index()\
     #    .sort_values(['team_id', 'season_start_year'])\
