@@ -1,13 +1,15 @@
 from functools import reduce
-import logging
 import pandas as pd
+
+from soccerlearn.get_logger import get_logger
 
 
 class Pipeline:
 
-    def __init__(self, transformer_funcs):
+    def __init__(self, transformer_funcs, keys_to_keep=None):
         self.transformer_funcs = transformer_funcs
-        self.logger = logging.getLogger()
+        self.keys_to_keep = keys_to_keep
+        self.logger = get_logger(self.__class__.__name__)
 
     def __call__(self, data, *args, **kwargs):
         return self.transform(data)
@@ -20,11 +22,17 @@ class Pipeline:
             else:
                 self.logger.info(f'Applying modifier {func.__name__}')
                 data = func(data, **kwargs)
-
-        feature_names = [f[0] for f in self.transformer_funcs if f[0]]
+        
+        feature_names = self.get_feature_names()
         data = self.combine_dataframes([data[k] for k in feature_names])
         print('Pipeline finished')
         return data.sort_index()
+
+    def get_feature_names(self):
+        if self.keys_to_keep:
+            return self.keys_to_keep
+        else:
+            return [f[0] for f in self.transformer_funcs if f[0]]
 
     @staticmethod
     def combine_dataframes(list_of_dataframes):
