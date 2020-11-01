@@ -12,23 +12,17 @@ class FeaturesComputer:
         self.logger = get_logger(self.__class__.__name__)
 
     def __call__(self, league, start_date, end_date, *args, **kwargs):
-        import ptvsd
-        ptvsd.enable_attach(address=('localhost', 5678), redirect_output=True)
-        #ptvsd.wait_for_attach()
         self.run(league, start_date, end_date)
 
     def run(self, league, start_date, end_date):
         self.set_run_parameters(league, start_date, end_date)
-        self.logger.info('Reading data')
+        self.logger.info('Reading data...')
         data = self.read_data()
-        self.logger.info('Data read')        
-        self.logger.info('Computing features')        
+        self.logger.info('Data read\n Computing features...')
         data = self.transform_data(data)
-        self.logger.info('Features computed')        
-        self.logger.info('Storing features')                
+        self.logger.info('Features computed\n Storing features...')
         self.store_data(data)
-        self.logger.info('Features stored. FeaturesComputer finished successfully')
-
+        self.logger.info('Features stored\n FeaturesComputer finished successfully')
 
     def set_run_parameters(self, league, start_date, end_date):
         self.run_parameters = {
@@ -38,7 +32,7 @@ class FeaturesComputer:
         }
         self.run_parameters['identifier'] = (
             f'{self.__class__.__name__}'
-            '_{"_".join(self.run_parameters.values())}'
+            f'_{"_".join(self.run_parameters.values())}'
         )
 
     def read_data(self):
