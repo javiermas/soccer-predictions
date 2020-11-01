@@ -1,34 +1,59 @@
 import pandas as pd
 
 
-def compute_home_and_visitor_features(data, columns_with_no_transform=['date']):
+COLUMNS_NO_TRANSFORM = ['date', 'result', 'team_id', 'season_id', 'local_team_id', 'visitor_team_id',
+                             'h2h_games_played_sum', 'h2h_draw_mean']
+COLUMNS_NO_DIFFERENCE = COLUMNS_NO_TRANSFORM + ['name', 'founded', 'short_code']
+
+
+def compute_home_and_visitor_features(data):
     features = data['features'].copy()
+    import ptvsd; ptvsd.enable_attach(address=('localhost', 5678), redirect_output=True);ptvsd.wait_for_attach()
     original_columns = list(features.columns)
     features = _add_local_team_id(features, data['fixtures'])
     features = _add_visitor_team_id(features, data['fixtures'])
-    renaming_dict = {f'local_{c}': c for c in columns_with_no_transform}
-    local_features = features.reset_index().add_prefix('local_').rename(columns=renaming_dict)
+    columns_to_transform = [col for col in features if col not in COLUMNS_NO_TRANSFORM]
+    columns_to_difference = [col for col in features if col not in COLUMNS_NO_DIFFERENCE]
+    local_features = features\
+        .reset_index()\
+        .query("team_id == local_team_id")\
+        .set_index(['local_team_id', 'date'])[columns_to_transform]\
+        .add_prefix('local_')
     features_with_local = pd.merge(
-        features,
+        features.reset_index(level=['season_id']), # To keep season_id
         local_features,
         on=['local_team_id', 'date'],
         how='left'
     )
-    renaming_dict = {f'visitor_{c}': c for c in columns_with_no_transform}        
-    visitor_features = features.reset_index().add_prefix('visitor_').rename(columns=renaming_dict)
+    visitor_features = features\
+        .reset_index()\
+        .query("team_id == visitor_team_id")\
+        .set_index(['visitor_team_id', 'date'])[columns_to_transform]\
+        .add_prefix('visitor_')
     features = pd.merge(
         features_with_local,
         visitor_features,
         on=['visitor_team_id', 'date'],
         how='left'        
     )
-    features = _remove_columns(features, original_columns)
-    return features.groupby(['local_team_id', 'date']).first()
+    columns_to_drop = [col for col in original_columns if col not in COLUMNS_NO_TRANSFORM]
+    features = _remove_columns(features, columns_to_drop)
+    features = features.groupby(['local_team_id', 'date']).first()
+    features = add_difference_features(features, columns_to_difference)
+    return features
+
+
+def add_difference_features(df, feature_names):
+    for name in feature_names:
+        print(name)
+        df[f'difference_in_{name}'] = df[f'local_{name}'] - df[f'visitor_{name}']
+        
+    return df
 
 
 def _remove_columns(df, columns_to_drop):
-    columns_to_drop += [f'{x}_{y}_team_id' for x, y in [('local', 'visitor'), ('visitor', 'local'), ('local', 'local'), ('visitor', 'visitor')]]
     return df.drop(columns=columns_to_drop)
+
 
 def _add_local_team_id(features, fixtures):
     features = features.join(_get_local_team_id(fixtures), how='outer')
